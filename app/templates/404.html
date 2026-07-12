@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}404 Page Not Found | BookHaven{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center my-5">
+  <div class="max-w-md mx-auto">
+    <div class="display-1 font-serif text-warning mb-3">404</div>
+    <h1 class="h2 mb-3">Chapter Not Found</h1>
+    <p class="text-muted lead fs-6 mb-4">
+      The page you are looking for seems to have been misplaced or lost in the archives.
+    </p>
+    <a href="/" class="btn btn-accent btn-lg px-4 rounded-pill">
+      <i class="bi bi-house-door me-2"></i> Return to Homepage
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Fine Stationary & Merch | BookHaven{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="text-center max-w-2xl mx-auto mb-5">
+    <h1 class="display-5 font-serif mb-2">Artisanal Stationary</h1>
+    <p class="text-muted lead fs-6">Elevate your reading and writing experience with premium journals, fountain pens, bookmarks, and accessories.</p>
+  </div>
+
+  <div class="row g-4">
+    {% for item in items %}
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="product-card">
+        <div class="book-cover-wrapper" style="aspect-ratio: 1/1;">
+          {% if item.image_url %}
+          <img src="{{ item.image_url }}" alt="{{ item.name }}" loading="lazy">
+          {% else %}
+          <div class="book-placeholder-cover">
+            <i class="bi bi-pencil-square book-icon"></i>
+            <div class="small fw-bold">{{ item.name }}</div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-body-custom">
+          <h3 class="book-title mb-2">{{ item.name }}</h3>
+          <p class="small text-muted mb-3">{{ item.description or 'Premium quality bookstore merchandise.' }}</p>
+          <div class="mt-auto d-flex align-items-center justify-content-between">
+            <span class="price-tag">${{ "%.2f"|format(item.price) }}</span>
+            <span class="badge bg-light text-dark border">In Stock: {{ item.stock }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <i class="bi bi-pen display-3 text-muted mb-3 d-block"></i>
+      <h4>No Stationary Available</h4>
+      <p class="text-muted">Check back soon for new accessories and notebooks!</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

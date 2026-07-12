@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Search Results for "{{ query }}" | BookHaven{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="mb-4 pb-3 border-bottom">
+    <h1 class="h2 mb-1">Search Results</h1>
+    <p class="text-muted mb-0">
+      {% if query %}
+      Results matching "<strong>{{ query }}</strong>" ({{ books|length }} items found)
+      {% else %}
+      Please enter a query in the search bar above.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="row g-4">
+    {% for book in books %}
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="book-card">
+        <div class="book-cover-wrapper">
+          {% if book.cover_image_url %}
+          <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" loading="lazy">
+          {% else %}
+          <div class="book-placeholder-cover">
+            <i class="bi bi-book book-icon"></i>
+            <div class="small fw-bold">{{ book.title }}</div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-body-custom">
+          {% if book.genre %}
+          <span class="badge-genre">{{ book.genre.name }}</span>
+          {% endif %}
+          <h3 class="book-title">
+            <a href="/books/{{ book.id }}">{{ book.title }}</a>
+          </h3>
+          <p class="book-author">by {{ book.author }}</p>
+          <div class="mt-auto d-flex align-items-center justify-content-between">
+            <span class="price-tag">${{ "%.2f"|format(book.price) }}</span>
+            <a href="/books/{{ book.id }}" class="btn btn-sm btn-accent rounded-circle">
+              <i class="bi bi-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <i class="bi bi-search display-3 text-muted mb-3 d-block"></i>
+      <h4>No Books Found Matching Your Search</h4>
+      <p class="text-muted">Try searching with a different keyword, author name, or ISBN.</p>
+      <a href="/books" class="btn btn-accent mt-2">Browse All Books</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Container
+  db:
+    image: postgres:16-alpine
+    container_name: bookstore_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: task2_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task2_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Container
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bookstore_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=task2_db
+      - DATABASE_USER=postgres
+      - DATABASE_PASS=postgres
+      - SECRET_KEY=super_secret_jwt_access_token_key_change_in_production
+      - REFRESH_SECRET_KEY=super_secret_jwt_refresh_token_key_change_in_production
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # React Frontend Container (Nginx Web Server)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bookstore_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

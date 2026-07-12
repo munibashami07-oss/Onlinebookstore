@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Genres & Categories | BookHaven{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="text-center max-w-2xl mx-auto mb-5">
+    <h1 class="display-5 font-serif mb-2">Explore Genres</h1>
+    <p class="text-muted lead fs-6">Find stories grouped by your favorite themes and categories.</p>
+  </div>
+
+  <div class="row g-4">
+    {% for genre in genres %}
+    <div class="col-sm-6 col-md-4 col-lg-3">
+      <a href="/genres/{{ genre.id }}" class="genre-pill p-4 h-100 d-flex flex-column justify-content-center">
+        <i class="bi bi-bookmarks display-5 mb-3 text-warning"></i>
+        <h4 class="h5 font-weight-bold mb-2">{{ genre.name }}</h4>
+        <p class="small text-muted mb-0">{{ genre.description or 'Explore titles in ' + genre.name + '.' }}</p>
+      </a>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <p class="text-muted">No genres available in the store.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

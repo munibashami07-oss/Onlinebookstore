@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ genre.name }} Books | BookHaven{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/genres">Genres</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ genre.name }}</li>
+    </ol>
+  </nav>
+
+  <div class="mb-5 pb-3 border-bottom">
+    <h1 class="display-6 font-serif mb-2">{{ genre.name }}</h1>
+    <p class="text-muted lead fs-6 mb-0">{{ genre.description or 'Showing all titles in ' + genre.name + '.' }}</p>
+  </div>
+
+  <div class="row g-4">
+    {% for book in books %}
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="book-card">
+        <div class="book-cover-wrapper">
+          {% if book.cover_image_url %}
+          <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" loading="lazy">
+          {% else %}
+          <div class="book-placeholder-cover">
+            <i class="bi bi-book book-icon"></i>
+            <div class="small fw-bold">{{ book.title }}</div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-body-custom">
+          <span class="badge-genre">{{ genre.name }}</span>
+          <h3 class="book-title">
+            <a href="/books/{{ book.id }}">{{ book.title }}</a>
+          </h3>
+          <p class="book-author">by {{ book.author }}</p>
+          <div class="mt-auto d-flex align-items-center justify-content-between">
+            <span class="price-tag">${{ "%.2f"|format(book.price) }}</span>
+            <a href="/books/{{ book.id }}" class="btn btn-sm btn-accent rounded-circle">
+              <i class="bi bi-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+      <i class="bi bi-folder2-open display-3 text-muted mb-3 d-block"></i>
+      <h4>No Books Found</h4>
+      <p class="text-muted">There are currently no books listed under {{ genre.name }}.</p>
+      <a href="/genres" class="btn btn-accent mt-2">&larr; Back to All Genres</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
