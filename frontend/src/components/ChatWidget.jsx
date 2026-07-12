@@ -46,6 +46,8 @@ const ChatWidget = () => {
   const chatEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const lastSpokenIndexRef = useRef(0);
+  const committedTranscriptRef = useRef(''); // finalized speech not yet sent
+  const micOnRef = useRef(false); // true only while the USER wants the mic on
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -129,6 +131,7 @@ const ChatWidget = () => {
   useEffect(() => {
     if (!open) {
       stopSpeaking();
+      micOnRef.current = false;
       recognitionRef.current?.stop();
       setIsListening(false);
     }
@@ -137,6 +140,7 @@ const ChatWidget = () => {
   useEffect(() => {
     return () => {
       if (SPEECH_SYNTHESIS_SUPPORTED) window.speechSynthesis.cancel();
+      micOnRef.current = false;
       recognitionRef.current?.stop();
     };
   }, []);
@@ -159,6 +163,7 @@ const ChatWidget = () => {
     async (userText) => {
       if (!userText.trim() || loading) return;
       setQuestion('');
+      committedTranscriptRef.current = '';
       setError('');
       stopSpeaking();
 
@@ -204,43 +209,59 @@ const ChatWidget = () => {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = 'en-US';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    // Continuous so the mic keeps listening across pauses instead of
+    // stopping after the first thing the user says.
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event) => {
       let interim = '';
-      let final = '';
+      let finalChunk = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          final += transcript;
+          finalChunk += transcript;
         } else {
           interim += transcript;
         }
       }
-      if (final) {
-        setQuestion(final);
-        submitQuestion(final);
-      } else {
-        setQuestion(interim);
+      if (finalChunk) {
+        committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalChunk}`.trim();
       }
+      // Just populate the input — never auto-send. The user reviews/edits
+      // the transcribed text and sends it themselves via the send button.
+      setQuestion(`${committedTranscriptRef.current} ${interim}`.trim());
     };
 
     recognition.onerror = (event) => {
-      setIsListening(false);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        micOnRef.current = false;
+        setIsListening(false);
         setError('Microphone access was denied. Please allow microphone permissions to use voice input.');
       } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError('Voice input error. Please try again or type your question.');
       }
+      // 'no-speech'/'aborted' are transient — onend will decide whether to restart.
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      // Some browsers stop recognition on their own after a period of
+      // silence even with continuous=true. If the user hasn't manually
+      // turned the mic off, restart it so listening effectively continues
+      // until they press the mic button again.
+      if (micOnRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          setIsListening(false);
+        }
+      } else {
+        setIsListening(false);
+      }
     };
 
     return recognition;
-  }, [submitQuestion]);
+  }, []);
 
   const handleMicClick = () => {
     if (!SPEECH_RECOGNITION_SUPPORTED) {
@@ -249,6 +270,8 @@ const ChatWidget = () => {
     }
 
     if (isListening) {
+      // User is explicitly turning the mic off.
+      micOnRef.current = false;
       recognitionRef.current?.stop();
       setIsListening(false);
       return;
@@ -256,6 +279,8 @@ const ChatWidget = () => {
 
     stopSpeaking(); // don't listen while the AI is talking
     setError('');
+    committedTranscriptRef.current = '';
+    micOnRef.current = true;
     const recognition = initRecognition();
     recognitionRef.current = recognition;
     if (recognition) {
