@@ -86,7 +86,10 @@ const Books = () => {
     fetchBooks();
   }, [fetchBooks]);
 
-  // Update query params helper
+  // Update query params helper.
+  // NOTE: only resets to page 1 when a FILTER changes (genre, price, search,
+  // sort, in-stock) -- not when `key === 'page'` itself, otherwise clicking
+  // pagination controls would immediately get overwritten back to page 1.
   const updateParam = (key, value) => {
     const newParams = new URLSearchParams(searchParams);
     if (value) {
@@ -94,7 +97,9 @@ const Books = () => {
     } else {
       newParams.delete(key);
     }
-    newParams.set('page', '1'); // Reset to page 1 on filter change
+    if (key !== 'page') {
+      newParams.set('page', '1'); // Reset to page 1 on filter change
+    }
     setSearchParams(newParams);
   };
 
