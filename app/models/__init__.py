@@ -15,6 +15,8 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.stationary import Stationary
 from app.models.review import Review
 from app.models.chatbot import ChatbotLog
+from app.models.chat_message import ChatMessage
+from app.models.notification import Notification, NotificationType
 
 __all__ = [
     "Base",
@@ -38,4 +40,7 @@ __all__ = [
     "Stationary",
     "Review",
     "ChatbotLog",
+    "ChatMessage",
+    "Notification",
+    "NotificationType",
 ]

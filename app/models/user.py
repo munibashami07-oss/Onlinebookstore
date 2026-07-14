@@ -10,6 +10,8 @@ from app.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.models.cart import Cart
     from app.models.chatbot import ChatbotLog
+    from app.models.chat_message import ChatMessage
+    from app.models.notification import Notification
     from app.models.order import Order
     from app.models.review import Review
 
@@ -50,6 +52,21 @@ class User(Base, TimestampMixin):
     )
     chatbot_logs: Mapped[List["ChatbotLog"]] = relationship(
         "ChatbotLog", back_populates="user"
+    )
+    sent_messages: Mapped[List["ChatMessage"]] = relationship(
+        "ChatMessage",
+        foreign_keys="ChatMessage.sender_id",
+        back_populates="sender",
+        cascade="all, delete-orphan",
+    )
+    received_messages: Mapped[List["ChatMessage"]] = relationship(
+        "ChatMessage",
+        foreign_keys="ChatMessage.receiver_id",
+        back_populates="receiver",
+        cascade="all, delete-orphan",
+    )
+    notifications: Mapped[List["Notification"]] = relationship(
+        "Notification", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
