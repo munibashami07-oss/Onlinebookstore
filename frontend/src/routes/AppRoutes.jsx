@@ -18,7 +18,7 @@ import Cart from '../pages/Cart';
 import Checkout from '../pages/Checkout';
 import Orders from '../pages/Orders';
 import Payment from '../pages/Payment';
-
+import MessagesPage from '../pages/MessagesPage';
 // Admin Page
 import AdminDashboard from '../pages/AdminDashboard';
 import AdminInbox from '../pages/AdminInbox';
@@ -58,6 +58,15 @@ const AppRoutes = () => {
           <Layout><Checkout /></Layout>
         </ProtectedRoute>
       } />
+      <Route
+        path="/messages"
+        element={
+        <ProtectedRoute>
+            <Layout>
+                <MessagesPage />
+            </Layout>
+        </ProtectedRoute>
+         }/>
       <Route path="/payment" element={
         <ProtectedRoute>
           <Layout><Payment /></Layout>

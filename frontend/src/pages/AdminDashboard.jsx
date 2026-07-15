@@ -96,32 +96,34 @@ const AdminDashboard = () => {
   // Fetch Tab Specific Data
   const fetchTabData = useCallback(async (tab) => {
     setError(null);
-    try {
-      if (tab === 'books') {
-        const data = await adminService.listBooks(1, 50);
-        setBooks(data);
-      } else if (tab === 'genres') {
-        const data = await adminService.listGenres(0, 100);
-        setGenres(data);
-      } else if (tab === 'stationery') {
-        const data = await adminService.listStationery(0, 100);
-        setStationery(data);
-      } else if (tab === 'deals') {
-        const data = await adminService.listDeals(0, 100);
-        setDeals(data);
-      } else if (tab === 'inventory') {
-        const data = await adminService.getLowStockReport(1, 50);
-        setLowStock(data);
-      } else if (tab === 'users') {
-        const data = await adminService.listUsers(1, 50);
-        setUsers(data);
-      } else if (tab === 'orders') {
-        const data = await adminService.listOrders(1, 50);
-        setOrders(data);
-      }
-    } catch (err) {
-      setError(extractErrorMessage(err, `Failed to load ${tab} data.`));
-    }
+ if (tab === 'books') {
+  const data = await adminService.listBooks(1, 50);
+  setBooks(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'genres') {
+  const data = await adminService.listGenres(0, 100);
+  setGenres(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'stationery') {
+  const data = await adminService.listStationery(0, 100);
+  setStationery(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'deals') {
+  const data = await adminService.listDeals(0, 100);
+  setDeals(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'inventory') {
+  const data = await adminService.getLowStockReport(1, 50);
+  setLowStock(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'users') {
+  const data = await adminService.listUsers(1, 50);
+  setUsers(Array.isArray(data) ? data : data.items || []);
+} 
+else if (tab === 'orders') {
+  const data = await adminService.listOrders(1, 50);
+  setOrders(Array.isArray(data) ? data : data.items || []);
+}
   }, []);
 
   useEffect(() => {
