@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.email import send_verification_email
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -40,7 +41,13 @@ class AuthService:
             is_active=True,
             is_superuser=False,
         )
-        return await self.user_repo.create(new_user)
+        new_user = await self.user_repo.create(new_user)
+
+        # Fire-and-forget: failures are logged inside send_verification_email
+        # and never raised, so a broken mail server can't block registration.
+        await send_verification_email(new_user.email, new_user.full_name)
+
+        return new_user
 
     async def authenticate_user(self, email: str, password: str) -> User:
         """Authenticate user credentials."""

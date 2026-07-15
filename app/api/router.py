@@ -9,6 +9,7 @@ from app.api import (
     cart,
     chat,
     checkout,
+    email_verification,
     genres,
     orders,
     payment,
@@ -34,3 +35,4 @@ api_router.include_router(payment.router)
 api_router.include_router(chatbot.router)
 api_router.include_router(chat.router)
 api_router.include_router(chat.rest_router)
+api_router.include_router(email_verification.router)

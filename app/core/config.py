@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     # AI Integration Settings (Prepared for Phase 13)
     OPENAI_API_KEY: str = ""
 
+    # Email / Gmail SMTP Settings (Account confirmation emails)
+    GMAIL_ADDRESS: str = ""
+    GMAIL_APP_PASSWORD: str = ""
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+
+    # Base URL this backend is served from, used to build the verification
+    # link embedded in the confirmation email (e.g. https://api.yourdomain.com)
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+
     # CORS Configuration
     BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = [
         "http://localhost:8000",

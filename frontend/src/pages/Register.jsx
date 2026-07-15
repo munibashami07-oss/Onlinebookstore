@@ -9,6 +9,8 @@ const Register = () => {
   const navigate = useNavigate();
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -178,8 +180,8 @@ const Register = () => {
                     </span>
                     <input
                       id="register-password"
-                      type="password"
-                      className={`form-control border-start-0 ${errors.password ? 'is-invalid' : ''}`}
+                      type={showPassword ? 'text' : 'password'}
+                      className={`form-control border-start-0 border-end-0 ${errors.password ? 'is-invalid' : ''}`}
                       placeholder="Minimum 8 characters"
                       autoComplete="new-password"
                       {...register('password', {
@@ -192,6 +194,19 @@ const Register = () => {
                         },
                       })}
                     />
+                    <span
+                      className="input-group-text bg-light border-start-0"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setShowPassword((prev) => !prev);
+                      }}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                    </span>
                     {errors.password && <div className="invalid-feedback">{errors.password.message}</div>}
                   </div>
 
@@ -247,8 +262,8 @@ const Register = () => {
                     </span>
                     <input
                       id="register-confirm-password"
-                      type="password"
-                      className={`form-control border-start-0 ${errors.confirmPassword ? 'is-invalid' : ''}`}
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      className={`form-control border-start-0 border-end-0 ${errors.confirmPassword ? 'is-invalid' : ''}`}
                       placeholder="Re-enter your password"
                       autoComplete="new-password"
                       {...register('confirmPassword', {
@@ -256,6 +271,19 @@ const Register = () => {
                         validate: (value) => value === passwordValue || 'Passwords do not match.',
                       })}
                     />
+                    <span
+                      className="input-group-text bg-light border-start-0"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setShowConfirmPassword((prev) => !prev);
+                      }}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                    </span>
                     {errors.confirmPassword && (
                       <div className="invalid-feedback">{errors.confirmPassword.message}</div>
                     )}

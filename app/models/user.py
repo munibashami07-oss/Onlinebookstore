@@ -36,6 +36,9 @@ class User(Base, TimestampMixin):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Tracks whether the user has clicked the confirmation link sent to their
+    # email on registration. Login is NOT gated on this flag by design.
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole), default=UserRole.CUSTOMER, nullable=False
     )
