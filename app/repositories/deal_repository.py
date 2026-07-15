@@ -61,6 +61,18 @@ class DealRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+async def list_active_deals(self) -> List[Deal]:
+    """Fetch active deals for homepage."""
+    stmt = (
+        select(Deal)
+        .where(Deal.is_active.is_(True))
+        .order_by(Deal.end_date.asc())
+    )
+
+    result = await self.db.execute(stmt)
+    return list(result.scalars().all())
+
+
     async def update(self, deal: Deal) -> Deal:
         """Persist changes to an existing deal."""
         await self.db.flush()
