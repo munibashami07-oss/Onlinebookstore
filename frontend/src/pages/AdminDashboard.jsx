@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import adminService from '../api/adminService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { extractErrorMessage } from '../utils/errorUtils';
@@ -350,6 +351,9 @@ const dailySalesChartData = {
           </h1>
           <p className="text-muted mb-0">System administration, catalog CRUD, inventory control, and store analytics.</p>
         </div>
+        <Link to="/admin/inbox" className="btn btn-success rounded-pill px-4 mt-3 mt-md-0">
+          <i className="bi bi-headset me-1"></i> Support Inbox
+        </Link>
       </div>
 
       {/* Error Alert */}
@@ -1130,6 +1134,15 @@ const dailySalesChartData = {
                     </span>
                   </td>
                   <td className="text-end">
+                    {u.role !== 'admin' && (
+                      <Link
+                        to={`/admin/inbox/${u.id}`}
+                        className="btn btn-sm btn-outline-primary me-2"
+                        title={`Chat with ${u.full_name}`}
+                      >
+                        <i className="bi bi-chat-dots-fill"></i>
+                      </Link>
+                    )}
                     <button className="btn btn-sm btn-outline-danger" onClick={async () => {
                       if (window.confirm('Delete user account?')) {
                         await adminService.deleteUser(u.id);

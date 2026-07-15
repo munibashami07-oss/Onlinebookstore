@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -88,6 +88,55 @@ class ChatMessageRepository:
         )
         await self.db.execute(stmt)
         await self.db.flush()
+
+    async def get_conversations(self, user_id: int) -> List[dict]:
+        """One row per counterparty `user_id` has ever exchanged messages
+        with: the most recent message in that thread, plus how many of the
+        counterparty's messages are still unread. Ordered newest-first, for
+        rendering a WhatsApp-style inbox list.
+        """
+        other_user_expr = case(
+            (ChatMessage.sender_id == user_id, ChatMessage.receiver_id),
+            else_=ChatMessage.sender_id,
+        )
+
+        # Highest message id per counterparty stands in for "most recent
+        # message" -- ids are assigned in insertion order, so this avoids
+        # tie-breaking issues that `max(created_at)` could hit.
+        latest_subq = (
+            select(
+                other_user_expr.label("other_user_id"),
+                func.max(ChatMessage.id).label("last_message_id"),
+            )
+            .where(or_(ChatMessage.sender_id == user_id, ChatMessage.receiver_id == user_id))
+            .group_by(other_user_expr)
+            .subquery()
+        )
+
+        stmt = (
+            select(ChatMessage)
+            .join(latest_subq, ChatMessage.id == latest_subq.c.last_message_id)
+            .options(
+                selectinload(ChatMessage.sender),
+                selectinload(ChatMessage.receiver),
+            )
+            .order_by(ChatMessage.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        last_messages = list(result.scalars().all())
+
+        conversations = []
+        for message in last_messages:
+            other_user = message.receiver if message.sender_id == user_id else message.sender
+            unread_count = await self.get_unread_count(user_id=user_id, from_user_id=other_user.id)
+            conversations.append(
+                {
+                    "other_user": other_user,
+                    "last_message": message,
+                    "unread_count": unread_count,
+                }
+            )
+        return conversations
 
     async def get_message(self, message_id: int) -> Optional[ChatMessage]:
         """Fetch a single message by primary key."""

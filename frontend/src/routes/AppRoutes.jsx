@@ -21,6 +21,7 @@ import Payment from '../pages/Payment';
 
 // Admin Page
 import AdminDashboard from '../pages/AdminDashboard';
+import AdminInbox from '../pages/AdminInbox';
 
 // Reusable / Fallback Components
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -76,6 +77,16 @@ const AppRoutes = () => {
       <Route path="/admin" element={
         <AdminRoute>
           <Layout><AdminDashboard /></Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/inbox" element={
+        <AdminRoute>
+          <Layout><AdminInbox /></Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/inbox/:customerId" element={
+        <AdminRoute>
+          <Layout><AdminInbox /></Layout>
         </AdminRoute>
       } />
 

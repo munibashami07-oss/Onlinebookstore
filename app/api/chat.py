@@ -10,20 +10,86 @@ that case -- we log it but don't treat it as an error).
 """
 
 import logging
+from typing import List
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.session import get_db
+from app.dependencies import get_current_active_user
 from app.models.chat_message import ChatMessage
 from app.models.user import User
 from app.repositories.chat_message_repository import ChatMessageRepository
+from app.repositories.user_repository import UserRepository
+from app.schemas.chat import ChatMessageResponse, ConversationResponse
+from app.schemas.user import UserPublic
 from app.websocket.auth import get_current_user_ws
 from app.websocket.manager import manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["WebSocket Chat"])
+rest_router = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+@rest_router.get(
+    "/support-contact",
+    response_model=UserPublic,
+    summary="Get the fixed support admin a customer should message",
+)
+async def get_support_contact(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Return the single fixed admin used as the customer support contact.
+
+    Single-admin support model: every customer's "Contact support" widget
+    messages this same admin account (the lowest-id active admin).
+    """
+    user_repo = UserRepository(db)
+    admin = await user_repo.get_first_admin()
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No support admin is currently configured.",
+        )
+    return admin
+
+
+@rest_router.get(
+    "/conversation/{other_user_id}",
+    response_model=List[ChatMessageResponse],
+    summary="Get message history with a specific user",
+)
+async def get_conversation_history(
+    other_user_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[ChatMessage]:
+    """Fetch past messages between the current user and `other_user_id`,
+    oldest-first, to seed a chat thread before the WebSocket takes over
+    for live messages."""
+    repo = ChatMessageRepository(db)
+    return await repo.get_conversation(current_user.id, other_user_id, skip=skip, limit=limit)
+
+
+@rest_router.get(
+    "/conversations",
+    response_model=List[ConversationResponse],
+    summary="List all conversation threads for the current user (inbox view)",
+)
+async def get_conversations(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[dict]:
+    """Return every thread the current user is part of, newest activity
+    first -- the admin-side inbox listing every customer who has messaged
+    in, and equally usable on the customer side if they ever have more
+    than one active thread."""
+    repo = ChatMessageRepository(db)
+    return await repo.get_conversations(current_user.id)
 
 
 @router.websocket("/chat")

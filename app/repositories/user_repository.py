@@ -46,6 +46,18 @@ class UserRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_first_admin(self) -> Optional[User]:
+        """Fetch the lowest-id admin user, used as the fixed customer-support
+        contact for the chat feature (single-admin support model)."""
+        stmt = (
+            select(User)
+            .where(User.role == UserRole.ADMIN, User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
+
     async def update_user(self, user: User) -> User:
         """Persist changes to an existing user instance."""
         await self.db.flush()

@@ -47,7 +47,7 @@ export function useChatSocket({
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || wsRef.current !== ws) return;
       setStatus("open");
       reconnectAttempts.current = 0;
 
@@ -62,7 +62,7 @@ export function useChatSocket({
     };
 
     ws.onmessage = (event) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || wsRef.current !== ws) return;
       let data;
       try {
         data = JSON.parse(event.data);
@@ -95,6 +95,7 @@ export function useChatSocket({
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return; // superseded by a newer socket -- ignore
       if (!mountedRef.current) return;
       setStatus("closed");
       clearInterval(pingIntervalRef.current);
@@ -104,7 +105,7 @@ export function useChatSocket({
     };
 
     ws.onerror = () => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || wsRef.current !== ws) return;
       setStatus("error");
     };
   }, [token, wsUrl, currentUserId, otherUserId]);

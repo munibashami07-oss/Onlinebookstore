@@ -2,6 +2,7 @@ import React from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import ChatWidget from '../components/ChatWidget';
+import ChatSupportWidget from '../components/ChatSupportWidget';
 
 const Layout = ({ children }) => {
   return (
@@ -12,6 +13,7 @@ const Layout = ({ children }) => {
       </main>
       <Footer />
       <ChatWidget />
+      <ChatSupportWidget />
     </div>
   );
 };
