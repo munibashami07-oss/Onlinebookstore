@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_async_session
+from app.core.session import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole
 
@@ -17,7 +17,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Provide AsyncSession dependency for routes."""
-    async with get_async_session() as session:
+    async for session in get_db():
         yield session
 
 
