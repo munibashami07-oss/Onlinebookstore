@@ -41,6 +41,16 @@ const AIChat = () => {
   // know which message index triggered the current send, so we only
   // auto-speak the answer that was just generated, not old history.
   const lastSpokenIndexRef = useRef(-1);
+  // Speech-to-text turn-taking state:
+  // - micOnRef: true only while the USER wants the mic on (persists across turns)
+  // - canProcessRef: true only while it's the user's "turn" to speak. While
+  //   false (AI is generating/speaking its answer) the recognizer keeps
+  //   running — the mic stays connected/open — but any transcribed speech
+  //   is ignored, so we don't pick up the AI's own voice or interrupt mid-answer.
+  // - committedTranscriptRef: finalized speech chunks not yet sent.
+  const micOnRef = useRef(false);
+  const canProcessRef = useRef(true);
+  const committedTranscriptRef = useRef('');
 
   // Auto-scroll chat to bottom
   const scrollToBottom = () => {
@@ -77,15 +87,24 @@ const AIChat = () => {
 
   // ── Text-to-Speech ────────────────────────────────────────────────────────
   const speakText = useCallback(
-    (text) => {
-      if (!SPEECH_SYNTHESIS_SUPPORTED || !autoSpeak || !text) return;
+    (text, onDone) => {
+      if (!SPEECH_SYNTHESIS_SUPPORTED || !autoSpeak || !text) {
+        onDone?.();
+        return;
+      }
       window.speechSynthesis.cancel(); // stop anything currently playing
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1;
       utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        onDone?.();
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        onDone?.();
+      };
       window.speechSynthesis.speak(utterance);
     },
     [autoSpeak]
@@ -109,7 +128,11 @@ const AIChat = () => {
       !loading
     ) {
       lastSpokenIndexRef.current = lastIdx;
-      speakText(lastMsg.text);
+      speakText(lastMsg.text, () => {
+        // The AI has finished talking — hand the turn back to the user.
+        // The recognizer never stopped, so this just resumes processing.
+        if (micOnRef.current) canProcessRef.current = true;
+      });
     }
   }, [messages, loading, speakText]);
 
@@ -149,6 +172,9 @@ const AIChat = () => {
         setMessages((prev) => [...prev, { sender: 'ai', text: res.answer }]);
       } catch (err) {
         setError(extractErrorMessage(err, 'AI Assistant service is currently unreachable.'));
+        // No AI message will be appended, so the "speak finished" callback
+        // that normally reopens the mic will never fire — reopen it here.
+        if (micOnRef.current) canProcessRef.current = true;
       } finally {
         setLoading(false);
       }
@@ -161,39 +187,69 @@ const AIChat = () => {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = 'en-US';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    // Continuous: the mic stream stays open across the whole conversation
+    // instead of closing after each utterance. We control turn-taking
+    // ourselves via canProcessRef rather than by stopping/restarting the
+    // underlying recognition session.
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event) => {
+      // It's the AI's turn (thinking or speaking) — ignore anything the
+      // mic picks up right now (this also prevents the AI's own TTS audio
+      // from being transcribed back in as if the user said it).
+      if (!canProcessRef.current) return;
+
       let interim = '';
-      let final = '';
+      let finalChunk = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          final += transcript;
+          finalChunk += transcript;
         } else {
           interim += transcript;
         }
       }
-      if (final) {
-        setQuestion(final);
-        submitQuestion(final);
-      } else {
-        setQuestion(interim);
+      if (finalChunk) {
+        committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalChunk}`.trim();
+      }
+      setQuestion(`${committedTranscriptRef.current} ${interim}`.trim());
+
+      // The browser's own speech engine detected a pause (that's what
+      // `isFinal` means) — send right away instead of waiting for a click.
+      if (finalChunk && committedTranscriptRef.current) {
+        const toSend = committedTranscriptRef.current;
+        committedTranscriptRef.current = '';
+        canProcessRef.current = false; // hold the mic's attention until the AI responds
+        submitQuestion(toSend);
       }
     };
 
     recognition.onerror = (event) => {
-      setIsListening(false);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        micOnRef.current = false;
+        setIsListening(false);
         setError('Microphone access was denied. Please allow microphone permissions to use voice input.');
       } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError('Voice input error. Please try again or type your question.');
       }
+      // 'no-speech'/'aborted' are transient — onend decides whether to restart.
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      // Some browsers end the recognition session on their own after a
+      // stretch of silence, even with continuous=true. If the user hasn't
+      // explicitly turned the mic off, restart it immediately so, from
+      // their perspective, the mic never disconnects.
+      if (micOnRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          setIsListening(false);
+        }
+      } else {
+        setIsListening(false);
+      }
     };
 
     return recognition;
@@ -206,6 +262,8 @@ const AIChat = () => {
     }
 
     if (isListening) {
+      // User is explicitly turning the mic off.
+      micOnRef.current = false;
       recognitionRef.current?.stop();
       setIsListening(false);
       return;
@@ -213,6 +271,9 @@ const AIChat = () => {
 
     stopSpeaking(); // don't listen while the AI is talking
     setError('');
+    committedTranscriptRef.current = '';
+    micOnRef.current = true;
+    canProcessRef.current = true;
     const recognition = initRecognition();
     recognitionRef.current = recognition;
     if (recognition) {
@@ -224,6 +285,7 @@ const AIChat = () => {
   // Stop recognition on unmount
   useEffect(() => {
     return () => {
+      micOnRef.current = false;
       recognitionRef.current?.stop();
     };
   }, []);
@@ -390,7 +452,9 @@ const AIChat = () => {
                 className="form-control rounded-pill px-4"
                 placeholder={
                   isListening
-                    ? 'Listening…'
+                    ? loading || isSpeaking
+                      ? "AI is responding…"
+                      : 'Listening…'
                     : 'Ask about books, authors, genres, or store policies...'
                 }
                 value={question}
@@ -411,7 +475,10 @@ const AIChat = () => {
             </form>
             {isListening && (
               <small className="text-danger d-flex align-items-center gap-1 mt-2">
-                <i className="bi bi-record-circle"></i> Listening — speak your question now
+                <i className="bi bi-record-circle"></i>
+                {loading || isSpeaking
+                  ? ' Mic is on, waiting for the AI to finish responding…'
+                  : ' Listening — speak your question, it sends automatically when you pause'}
               </small>
             )}
           </div>

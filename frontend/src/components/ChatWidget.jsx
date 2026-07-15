@@ -48,6 +48,11 @@ const ChatWidget = () => {
   const lastSpokenIndexRef = useRef(0);
   const committedTranscriptRef = useRef(''); // finalized speech not yet sent
   const micOnRef = useRef(false); // true only while the USER wants the mic on
+  // True only while it's the user's "turn" to speak. False while the AI is
+  // generating or speaking its answer — the recognizer keeps running (the
+  // mic stays open/connected) but transcribed speech is ignored during
+  // that window, so we don't pick up the AI's own TTS audio or interrupt it.
+  const canProcessRef = useRef(true);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -94,15 +99,24 @@ const ChatWidget = () => {
 
   // ── Text-to-Speech ────────────────────────────────────────────────────────
   const speakText = useCallback(
-    (text) => {
-      if (!SPEECH_SYNTHESIS_SUPPORTED || !autoSpeak || !text) return;
+    (text, onDone) => {
+      if (!SPEECH_SYNTHESIS_SUPPORTED || !autoSpeak || !text) {
+        onDone?.();
+        return;
+      }
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1;
       utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        onDone?.();
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        onDone?.();
+      };
       window.speechSynthesis.speak(utterance);
     },
     [autoSpeak]
@@ -123,7 +137,11 @@ const ChatWidget = () => {
     const lastMsg = messages[lastIdx];
     if (lastMsg.sender === 'ai' && lastIdx > lastSpokenIndexRef.current && !loading) {
       lastSpokenIndexRef.current = lastIdx;
-      speakText(lastMsg.text);
+      speakText(lastMsg.text, () => {
+        // The AI has finished talking — hand the turn back to the user.
+        // The recognizer never stopped, so this just resumes processing.
+        if (micOnRef.current) canProcessRef.current = true;
+      });
     }
   }, [messages, loading, open, speakText]);
 
@@ -132,6 +150,7 @@ const ChatWidget = () => {
     if (!open) {
       stopSpeaking();
       micOnRef.current = false;
+      canProcessRef.current = true;
       recognitionRef.current?.stop();
       setIsListening(false);
     }
@@ -175,6 +194,9 @@ const ChatWidget = () => {
         setMessages((prev) => [...prev, { sender: 'ai', text: res.answer }]);
       } catch (err) {
         setError(extractErrorMessage(err, 'AI Assistant service is currently unreachable.'));
+        // No AI message will be appended, so the "speak finished" callback
+        // that normally reopens the mic will never fire — reopen it here.
+        if (micOnRef.current) canProcessRef.current = true;
       } finally {
         setLoading(false);
       }
@@ -215,6 +237,11 @@ const ChatWidget = () => {
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event) => {
+      // It's the AI's turn (thinking or speaking) — ignore anything the
+      // mic picks up right now (this also prevents the AI's own TTS audio
+      // from being transcribed back in as if the user said it).
+      if (!canProcessRef.current) return;
+
       let interim = '';
       let finalChunk = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -228,9 +255,16 @@ const ChatWidget = () => {
       if (finalChunk) {
         committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalChunk}`.trim();
       }
-      // Just populate the input — never auto-send. The user reviews/edits
-      // the transcribed text and sends it themselves via the send button.
       setQuestion(`${committedTranscriptRef.current} ${interim}`.trim());
+
+      // The browser's own speech engine detected a pause (that's what
+      // `isFinal` means) — send right away instead of waiting for a click.
+      if (finalChunk && committedTranscriptRef.current) {
+        const toSend = committedTranscriptRef.current;
+        committedTranscriptRef.current = '';
+        canProcessRef.current = false; // hold the mic's attention until the AI responds
+        submitQuestion(toSend);
+      }
     };
 
     recognition.onerror = (event) => {
@@ -261,7 +295,7 @@ const ChatWidget = () => {
     };
 
     return recognition;
-  }, []);
+  }, [submitQuestion]);
 
   const handleMicClick = () => {
     if (!SPEECH_RECOGNITION_SUPPORTED) {
@@ -281,6 +315,7 @@ const ChatWidget = () => {
     setError('');
     committedTranscriptRef.current = '';
     micOnRef.current = true;
+    canProcessRef.current = true;
     const recognition = initRecognition();
     recognitionRef.current = recognition;
     if (recognition) {
@@ -435,7 +470,10 @@ const ChatWidget = () => {
           <div className="p-2 border-top bg-white flex-shrink-0">
             {isListening && (
               <small className="text-danger d-flex align-items-center gap-1 mb-1 px-1">
-                <i className="bi bi-record-circle"></i> Listening — speak now
+                <i className="bi bi-record-circle"></i>
+                {loading || isSpeaking
+                  ? ' Mic on, waiting for the AI to finish…'
+                  : ' Listening — sends automatically when you pause'}
               </small>
             )}
             <form onSubmit={handleSendMessage} className="d-flex gap-2">

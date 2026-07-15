@@ -37,6 +37,18 @@ const chatService = {
     const response = await apiClient.get('/chat/conversations');
     return response.data;
   },
+
+  /**
+   * Search registered users to start a new chat with (any active user,
+   * any role -- open messaging model, not just the support admin).
+   * GET /chat/users?search=... -> [{ id, full_name, role }]
+   */
+  searchUsers: async (search = '', skip = 0, limit = 20) => {
+    const response = await apiClient.get('/chat/users', {
+      params: { search: search || undefined, skip, limit },
+    });
+    return response.data;
+  },
 };
 
 export default chatService;
