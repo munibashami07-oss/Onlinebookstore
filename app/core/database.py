@@ -1,10 +1,15 @@
 """Database engine configuration using SQLAlchemy 2.0 and settings from config.py."""
 
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import settings
 
-# Create SQLAlchemy 2.0 Async Engine reading separate DB settings from config.py
+# Create SQLAlchemy Async Engine
 engine: AsyncEngine = create_async_engine(
     settings.ASYNC_DATABASE_URL,
     echo=False,
@@ -13,3 +18,15 @@ engine: AsyncEngine = create_async_engine(
     pool_size=10,
     max_overflow=20,
 )
+
+# Session Factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+# Dependency
+async def get_async_session():
+    async with AsyncSessionLocal() as session:
+        yield session
