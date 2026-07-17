@@ -72,7 +72,7 @@ templates = Jinja2Templates(directory=template_dir)
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_origins=["https://onlinebookstore-frontend-production.up.railway.app",],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

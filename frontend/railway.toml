@@ -1,0 +1,2 @@
+[build]
+   buildArgs = { VITE_API_URL = "https://handsome-commitment-production-ac44.up.railway.app//api/v1" }

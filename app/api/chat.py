@@ -10,7 +10,7 @@ that case -- we log it but don't treat it as an error).
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,8 +43,10 @@ async def get_support_contact(
 ) -> User:
     """Return the single fixed admin used as the customer support contact.
 
-    Single-admin support model: every customer's "Contact support" widget
-    messages this same admin account (the lowest-id active admin).
+    Kept for the existing floating support widget's "quick access to
+    support" flow. The general messaging model no longer restricts users
+    to this contact -- see `search_chat_users` / `GET /chat/users` for the
+    "message anyone" contact picker used by the Messages inbox page.
     """
     user_repo = UserRepository(db)
     admin = await user_repo.get_first_admin()
@@ -54,6 +56,36 @@ async def get_support_contact(
             detail="No support admin is currently configured.",
         )
     return admin
+
+
+@rest_router.get(
+    "/users",
+    response_model=List[UserPublic],
+    summary="Search registered users to start a new chat with",
+)
+async def search_chat_users(
+    search: Optional[str] = Query(
+        None, min_length=1, max_length=100, description="Match against name or email"
+    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[User]:
+    """Return active registered users (any role) the current user can
+    start a new conversation with, excluding themselves.
+
+    Powers the "New chat" search in the Messages inbox. Open messaging
+    model: any active user can message any other active user -- customer
+    <-> admin, customer <-> customer, or admin <-> admin -- so this is
+    intentionally available to every authenticated user, not just admins
+    (contrast with `GET /users` in app/api/v1/users.py, which stays
+    admin-only and returns full account details).
+    """
+    user_repo = UserRepository(db)
+    return await user_repo.search_users(
+        exclude_user_id=current_user.id, search=search, skip=skip, limit=limit
+    )
 
 
 @rest_router.get(

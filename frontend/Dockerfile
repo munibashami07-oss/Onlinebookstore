@@ -7,6 +7,15 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+
+# Railway passes service Variables as build args, but ONLY for args that
+# are explicitly declared here with ARG -- without this, VITE_API_URL set
+# in the Railway dashboard never reaches this build step, and Vite bakes
+# in the fallback '/api/v1' instead, pointing requests at this frontend's
+# own domain instead of the backend.
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
 # Stage 2: Serve static production assets with Nginx
