@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import bookService from '../api/bookService';
 import genreService from '../api/genreService';
 import BookCard from '../components/BookCard';
@@ -11,6 +11,22 @@ const Home = () => {
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAuthNotice, setShowAuthNotice] = useState(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // If ProtectedRoute bounced a guest here, show a notice and clear the
+  // redirect flag so it doesn't reappear on refresh or browser back/forward.
+  useEffect(() => {
+    if (location.state?.authRequired) {
+      setShowAuthNotice(true);
+      navigate(location.pathname, { replace: true, state: {} });
+      const timer = setTimeout(() => setShowAuthNotice(false), 6000);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -35,6 +51,44 @@ const Home = () => {
 
   return (
     <div className="home-page">
+      {showAuthNotice && (
+        <div
+          className="alert shadow-lg d-flex align-items-start gap-3 border-0"
+          role="alert"
+          style={{
+            position: 'fixed',
+            top: '90px',
+            right: '24px',
+            zIndex: 2000,
+            maxWidth: '360px',
+            backgroundColor: '#fff7ed',
+            borderLeft: '4px solid #f59e0b',
+          }}
+        >
+          <i className="bi bi-shield-lock-fill text-warning fs-4"></i>
+          <div className="flex-grow-1">
+            <div className="fw-semibold small mb-1">Sign in required</div>
+            <div className="text-muted small mb-2">
+              Please sign in or create an account to continue browsing.
+            </div>
+            <div className="d-flex gap-2">
+              <Link to="/login" className="btn btn-sm btn-accent rounded-pill px-3">
+                Sign In
+              </Link>
+              <Link to="/register" className="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                Sign Up
+              </Link>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-close"
+            aria-label="Close"
+            onClick={() => setShowAuthNotice(false)}
+          ></button>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section
         className="hero-section text-white py-5 px-3 mb-5 rounded-4 position-relative overflow-hidden"

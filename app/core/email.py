@@ -1,66 +1,72 @@
-"""Plain-text email sending via Gmail SMTP.
+"""Simple SMTP email-sending utility (Gmail SMTP).
 
-Gmail requires an App Password for SMTP auth (your normal account
-password will be rejected): Google Account -> Security -> 2-Step
-Verification -> App Passwords. Put that 16-character value in
-GMAIL_APP_PASSWORD in your .env, not your login password.
+Uses the GMAIL_ADDRESS / GMAIL_APP_PASSWORD settings already defined in
+app/core/config.py. GMAIL_APP_PASSWORD must be a Gmail *App Password*
+(Google Account -> Security -> 2-Step Verification -> App Passwords),
+not your normal Gmail login password -- Gmail blocks plain SMTP auth
+with regular account passwords.
+
+Sending runs in a threadpool (smtplib is blocking) so it never blocks
+the async event loop -- same pattern already used for RAG warmup in
+main.py (run_in_threadpool).
 """
 
-import asyncio
 import logging
 import smtplib
-from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
-from app.core.email_verification import create_email_verification_token
 
 logger = logging.getLogger(__name__)
 
 
-def _send_email_sync(to_email: str, subject: str, body: str) -> None:
-    """Blocking SMTP send — always call via asyncio.to_thread from async code."""
-    message = EmailMessage()
-    message["From"] = settings.GMAIL_ADDRESS
-    message["To"] = to_email
-    message["Subject"] = subject
-    message.set_content(body)
+def _send_email_sync(to_email: str, subject: str, html_body: str) -> None:
+    if not settings.GMAIL_ADDRESS or not settings.GMAIL_APP_PASSWORD:
+        logger.warning(
+            "GMAIL_ADDRESS / GMAIL_APP_PASSWORD not configured -- skipping email to %s",
+            to_email,
+        )
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = settings.GMAIL_ADDRESS
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html"))
 
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
         server.starttls()
         server.login(settings.GMAIL_ADDRESS, settings.GMAIL_APP_PASSWORD)
-        server.send_message(message)
+        server.sendmail(settings.GMAIL_ADDRESS, to_email, msg.as_string())
 
 
-async def send_email(to_email: str, subject: str, body: str) -> None:
-    """Send a plain-text email without blocking the event loop.
+async def send_email(to_email: str, subject: str, html_body: str) -> None:
+    """Send an email without blocking the event loop.
 
-    Failures are logged, not raised, so a broken mail server never blocks
-    registration itself (login/registration must keep working either way).
+    Failures are logged, never raised -- a broken/unconfigured mail
+    server should never break registration or any other request that
+    happens to trigger a notification email.
     """
     try:
-        await asyncio.to_thread(_send_email_sync, to_email, subject, body)
+        await run_in_threadpool(_send_email_sync, to_email, subject, html_body)
     except Exception:
         logger.exception("Failed to send email to %s", to_email)
 
 
-async def send_verification_email(to_email: str, full_name: str) -> None:
-    """Send the account confirmation email containing a verification link."""
-    token = create_email_verification_token(to_email)
-    verify_link = (
-        f"{settings.BACKEND_BASE_URL}{settings.API_V1_STR}"
-        f"/auth/verify-email?token={token}"
-    )
-
-    subject = "Confirm your BookHaven account"
-    body = (
-        f"Hi {full_name},\n\n"
-        "Thanks for creating a BookHaven account. Please confirm your email "
-        "address by opening the link below:\n\n"
-        f"{verify_link}\n\n"
-        f"This link expires in {settings.EMAIL_VERIFICATION_EXPIRE_HOURS} hours. "
-        "You can still log in and use your account before confirming.\n\n"
-        "If you did not create this account, you can ignore this email.\n\n"
-        "— The BookHaven Team"
-    )
-
-    await send_email(to_email, subject, body)
+async def send_registration_confirmation_email(to_email: str, full_name: str) -> None:
+    """Send a welcome / account-confirmation email right after signup."""
+    subject = f"Welcome to {settings.PROJECT_NAME} — your account is confirmed"
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #1e293b;">
+      <h2 style="color: #4f46e5;">Welcome, {full_name}!</h2>
+      <p>Your account with <strong>{settings.PROJECT_NAME}</strong> has been created successfully.</p>
+      <p>You can now sign in and start browsing our catalog.</p>
+      <p style="margin-top: 24px; color: #64748b; font-size: 0.85rem;">
+        If you didn't create this account, you can safely ignore this email.
+      </p>
+    </div>
+    """
+    await send_email(to_email, subject, html_body)

@@ -3,6 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.email import send_registration_confirmation_email
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -60,7 +61,9 @@ class AuthService:
             is_active=True,
             is_superuser=False,
         )
-        return await self.user_repo.create_user(user)
+        created_user = await self.user_repo.create_user(user)
+        await send_registration_confirmation_email(created_user.email, created_user.full_name)
+        return created_user
 
     async def login(self, payload: LoginRequest) -> TokenResponse:
         """Authenticate user credentials and issue token pair.

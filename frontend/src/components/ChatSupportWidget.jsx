@@ -271,7 +271,9 @@ const ChatSupportWidget = () => {
         </div>
       )}
 
-      {/* Active chat window */}
+      {/* Active chat window -- ChatWindow now renders its own header
+          (name + live-status dot + close button, all on one row), so
+          there's no separate header wrapper here anymore. */}
       {open && !contactListOpen && (
         <div
           style={{
@@ -288,41 +290,9 @@ const ChatSupportWidget = () => {
             </div>
           )}
           {!loading && error && (
-          <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
-
-  {/* Left side */}
-  <div className="d-flex flex-column">
-    <span className="fw-semibold small">
-      {displayContact.full_name || 'Support'}
-    </span>
-
-    <small className="text-success d-flex align-items-center">
-      <span
-        className="bg-success rounded-circle me-1"
-        style={{ width: 8, height: 8 }}
-      />
-      Live
-    </small>
-  </div>
-
-  {/* Right side */}
-  <button
-    type="button"
-    onClick={() => setOpen(false)}
-    aria-label={`Close chat with ${displayContact.full_name || 'Support'}`}
-    className="btn btn-sm btn-light border-0 d-flex align-items-center justify-content-center p-0"
-    style={{
-      width: "26px",
-      height: "26px",
-      borderRadius: "50%",
-      flexShrink: 0
-    }}
-    title="Close chat"
-  >
-    <i className="bi bi-x-lg" style={{ fontSize: "0.85rem" }} />
-  </button>
-
-</div>
+            <div className="bg-white rounded-4 shadow-lg p-4 text-center text-danger small" style={{ width: '360px' }}>
+              {error}
+            </div>
           )}
           {!loading && !error && !displayContact && (
             <div className="bg-white rounded-4 shadow-lg p-4 text-center text-muted small" style={{ width: '360px' }}>
@@ -330,30 +300,16 @@ const ChatSupportWidget = () => {
             </div>
           )}
           {!loading && !error && displayContact && (
-            <div className="bg-white rounded-4 shadow-lg overflow-hidden" style={{ width: '360px' }}>
-              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
-                <span className="fw-semibold small">{displayContact.full_name || 'Support'}</span>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label={`Close chat with ${displayContact.full_name || 'Support'}`}
-                  className="btn btn-sm btn-light border-0 d-flex align-items-center justify-content-center p-0"
-                  style={{ width: '26px', height: '26px', borderRadius: '50%' }}
-                  title="Close chat"
-                >
-                  <i className="bi bi-x-lg" style={{ fontSize: '0.85rem' }}></i>
-                </button>
-              </div>
-              <ChatWindow
-                token={token}
-                currentUserId={user.id}
-                otherUserId={displayContact.id}
-                otherUserName={displayContact.full_name || 'Support'}
-                initialMessages={initialMessages}
-                maxWidth="360px"
-                height="440px"
-              />
-            </div>
+            <ChatWindow
+              token={token}
+              currentUserId={user.id}
+              otherUserId={displayContact.id}
+              otherUserName={displayContact.full_name || 'Support'}
+              initialMessages={initialMessages}
+              maxWidth="360px"
+              height="480px"
+              onClose={() => setOpen(false)}
+            />
           )}
         </div>
       )}

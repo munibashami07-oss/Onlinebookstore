@@ -31,16 +31,39 @@ import NotFound from '../components/NotFound';
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public Routes with standard Layout wrapper */}
+      {/* Public: only Home, Login, and Register are reachable by guests.
+          Everything else redirects to Home with a "please sign in" notice. */}
       <Route path="/" element={<Layout><Home /></Layout>} />
-      <Route path="/books" element={<Layout><Books /></Layout>} />
-      <Route path="/books/:id" element={<Layout><BookDetails /></Layout>} />
-      <Route path="/genres" element={<Layout><Genres /></Layout>} />
-      <Route path="/genres/:id" element={<Layout><Books /></Layout>} /> {/* Using Books page with genre filter */}
-      {/* <Route path="/stationary" element={<Layout><Stationary /></Layout>} /> */}
-      <Route path="/deals" element={<Layout><Deals /></Layout>} />
       <Route path="/login" element={<Layout><Login /></Layout>} />
       <Route path="/register" element={<Layout><Register /></Layout>} />
+
+      {/* Now gated: browsing the catalog requires an account */}
+      <Route path="/books" element={
+        <ProtectedRoute>
+          <Layout><Books /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/books/:id" element={
+        <ProtectedRoute>
+          <Layout><BookDetails /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/genres" element={
+        <ProtectedRoute>
+          <Layout><Genres /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/genres/:id" element={
+        <ProtectedRoute>
+          <Layout><Books /></Layout>
+        </ProtectedRoute>
+      } /> {/* Using Books page with genre filter */}
+      {/* <Route path="/stationary" element={<Layout><Stationary /></Layout>} /> */}
+      <Route path="/deals" element={
+        <ProtectedRoute>
+          <Layout><Deals /></Layout>
+        </ProtectedRoute>
+      } />
 
       {/* Protected Customer Routes */}
       <Route path="/profile" element={
