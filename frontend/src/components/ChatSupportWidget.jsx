@@ -167,9 +167,9 @@ const ChatSupportWidget = () => {
           width: '40px',
           height: '40px',
           borderRadius: '50%',
-          backgroundColor: '#fff',
-          color: '#198754',
-          border: '1px solid #198754',
+          backgroundColor: '#198754',
+          color: '#fff',
+          border: '0',
           zIndex: 1051,
           fontSize: '1rem',
         }}
@@ -298,15 +298,30 @@ const ChatSupportWidget = () => {
             </div>
           )}
           {!loading && !error && displayContact && (
-            <ChatWindow
-              token={token}
-              currentUserId={user.id}
-              otherUserId={displayContact.id}
-              otherUserName={displayContact.full_name || 'Support'}
-              initialMessages={initialMessages}
-              maxWidth="360px"
-              height="480px"
-            />
+            <div className="bg-white rounded-4 shadow-lg overflow-hidden" style={{ width: '360px' }}>
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+                <span className="fw-semibold small">{displayContact.full_name || 'Support'}</span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label={`Close chat with ${displayContact.full_name || 'Support'}`}
+                  className="btn btn-sm btn-light border-0 d-flex align-items-center justify-content-center p-0"
+                  style={{ width: '26px', height: '26px', borderRadius: '50%' }}
+                  title="Close chat"
+                >
+                  <i className="bi bi-x-lg" style={{ fontSize: '0.85rem' }}></i>
+                </button>
+              </div>
+              <ChatWindow
+                token={token}
+                currentUserId={user.id}
+                otherUserId={displayContact.id}
+                otherUserName={displayContact.full_name || 'Support'}
+                initialMessages={initialMessages}
+                maxWidth="360px"
+                height="440px"
+              />
+            </div>
           )}
         </div>
       )}
