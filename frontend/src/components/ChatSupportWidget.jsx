@@ -288,9 +288,41 @@ const ChatSupportWidget = () => {
             </div>
           )}
           {!loading && error && (
-            <div className="bg-white rounded-4 shadow-lg p-4 text-center text-danger small" style={{ width: '360px' }}>
-              {error}
-            </div>
+          <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+
+  {/* Left side */}
+  <div className="d-flex flex-column">
+    <span className="fw-semibold small">
+      {displayContact.full_name || 'Support'}
+    </span>
+
+    <small className="text-success d-flex align-items-center">
+      <span
+        className="bg-success rounded-circle me-1"
+        style={{ width: 8, height: 8 }}
+      />
+      Live
+    </small>
+  </div>
+
+  {/* Right side */}
+  <button
+    type="button"
+    onClick={() => setOpen(false)}
+    aria-label={`Close chat with ${displayContact.full_name || 'Support'}`}
+    className="btn btn-sm btn-light border-0 d-flex align-items-center justify-content-center p-0"
+    style={{
+      width: "26px",
+      height: "26px",
+      borderRadius: "50%",
+      flexShrink: 0
+    }}
+    title="Close chat"
+  >
+    <i className="bi bi-x-lg" style={{ fontSize: "0.85rem" }} />
+  </button>
+
+</div>
           )}
           {!loading && !error && !displayContact && (
             <div className="bg-white rounded-4 shadow-lg p-4 text-center text-muted small" style={{ width: '360px' }}>
