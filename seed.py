@@ -57,8 +57,8 @@ async def seed_admin_user() -> None:
             await conn.execute(
                 text(
                     """
-                    INSERT INTO enrolled_users (email, full_name, hashed_password, is_active, is_superuser, role)
-                    VALUES (:email, :full_name, :hashed_password, TRUE, TRUE, 'admin')
+                  INSERT INTO enrolled_users (email, full_name, hashed_password, is_active, is_superuser, role, created_at, updated_at)
+                  VALUES (:email, :full_name, :hashed_password, TRUE, TRUE, 'ADMIN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     """
                 ),
                 {
@@ -72,3 +72,4 @@ async def seed_admin_user() -> None:
 
 if __name__ == "__main__":
     asyncio.run(seed_admin_user())
+
