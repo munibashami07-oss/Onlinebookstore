@@ -70,10 +70,7 @@ templates = Jinja2Templates(directory=template_dir)
 
 # CORS Configuration
 if settings.BACKEND_CORS_ORIGINS:
-    origins = [
-        "https://onlinebookstore-frontend-production.up.railway.app",
-        "https://subtle-marshmallow-c8aeac.netlify.app",
-    ]
+    origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
     print(f"CORS allow_origins configured as: {origins}", flush=True)
     app.add_middleware(
         CORSMiddleware,
