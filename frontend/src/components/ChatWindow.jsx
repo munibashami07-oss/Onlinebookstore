@@ -43,9 +43,10 @@ export default function ChatWindow({
   maxWidth = '480px',
   height = '560px',
 }) {
-  const resolvedWsUrl =
-    wsUrl ||
-    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws/chat`;
+  const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const resolvedWsUrl =
+  wsUrl ||
+  `${API_URL.replace(/^http/, 'ws')}/ws/chat`;
 
   const { messages, sendMessage, status } = useChatSocket({
     token,
