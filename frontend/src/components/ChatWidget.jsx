@@ -1,526 +1,300 @@
-import React, { useEffect, useState, useRef, useContext, useCallback } from 'react';
-import chatbotService from '../api/chatbotService';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { extractErrorMessage } from '../utils/errorUtils';
-
-const GREETING = {
-  sender: 'ai',
-  text: 'Hello! I am your BookHaven AI Reading Companion. Ask me anything about book recommendations, plot synopses, store shipping rules, or return policies!',
-};
-
-// Browser vendor prefix handling for the Web Speech API.
-const SpeechRecognitionAPI =
-  typeof window !== 'undefined'
-    ? window.SpeechRecognition || window.webkitSpeechRecognition
-    : null;
-const SPEECH_RECOGNITION_SUPPORTED = !!SpeechRecognitionAPI;
-const SPEECH_SYNTHESIS_SUPPORTED =
-  typeof window !== 'undefined' && 'speechSynthesis' in window;
+import { UserContext } from '../context/UserContext';
+import chatService from '../api/chatService';
+import ChatWindow from './ChatWindow';
 
 /**
- * Site-wide floating AI chat widget.
- * Renders as a small circular avatar pinned to the right edge of the
- * viewport on every page (mounted once in Layout). Clicking it expands
- * a compact chat panel without navigating away from the current page.
+ * MessagesPage
+ * -----------------------------------------------------------------------
+ * The general-purpose messaging hub. Unlike `ChatSupportWidget` (which is
+ * hard-wired to the single fixed support admin), this page lets any
+ * logged-in user message *any other registered, active user* -- customer
+ * to admin, admin to customer, or customer to customer.
+ *
+ * Left column: existing conversation threads (GET /chat/conversations),
+ * plus a "New chat" search box that queries GET /chat/users to find
+ * anyone to start a thread with. Right column: the active thread,
+ * rendered with the existing `ChatWindow` (unchanged -- it already
+ * supports messaging an arbitrary `otherUserId` over the chat WebSocket).
+ *
+ * Route this at e.g. `/messages` for any authenticated user (customer or
+ * admin) -- it deliberately doesn't gate on role.
  */
-const ChatWidget = () => {
-  const { isAuthenticated } = useContext(AuthContext);
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([GREETING]);
-  const [question, setQuestion] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // Voice state
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(() => {
-    try {
-      return localStorage.getItem('aichat_auto_speak') !== 'false';
-    } catch {
-      return true;
-    }
-  });
+const AVATAR_COLORS = [
+  '#6366f1', '#0ea5e9', '#10b981', '#f59e0b',
+  '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899',
+];
 
-  const chatEndRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const lastSpokenIndexRef = useRef(0);
-  const committedTranscriptRef = useRef(''); // finalized speech not yet sent
-  const micOnRef = useRef(false); // true only while the USER wants the mic on
-  // True only while it's the user's "turn" to speak. False while the AI is
-  // generating or speaking its answer — the recognizer keeps running (the
-  // mic stays open/connected) but transcribed speech is ignored during
-  // that window, so we don't pick up the AI's own TTS audio or interrupt it.
-  const canProcessRef = useRef(true);
+function avatarColorFor(name = '') {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+function initialsFor(name = '') {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0 || !parts[0]) return '?';
+  return parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
-  useEffect(() => {
-    if (open) scrollToBottom();
-  }, [messages, loading, open]);
-
-  // Load persisted chat history the first time the widget is opened
-  // (only for authenticated users; guests just get the greeting).
-  const fetchHistory = useCallback(async () => {
-    if (!isAuthenticated || historyLoaded) return;
-    try {
-      const logs = await chatbotService.getChatHistory(1, 50);
-      if (logs && logs.length > 0) {
-        const formatted = [];
-        logs.reverse().forEach((log) => {
-          formatted.push({ sender: 'user', text: log.question });
-          formatted.push({ sender: 'ai', text: log.answer });
-        });
-        setMessages(formatted);
-        // Don't speak historical messages on load, only new ones going forward.
-        lastSpokenIndexRef.current = formatted.length - 1;
-      }
-    } catch {
-      // Non-fatal if history fails to load
-    } finally {
-      setHistoryLoaded(true);
-    }
-  }, [isAuthenticated, historyLoaded]);
-
-  useEffect(() => {
-    if (open) fetchHistory();
-  }, [open, fetchHistory]);
-
-  // Reset the locally-loaded history flag if the user logs out/in so the
-  // widget re-syncs with the correct account next time it's opened.
-  useEffect(() => {
-    setHistoryLoaded(false);
-    setMessages([GREETING]);
-    lastSpokenIndexRef.current = 0;
-  }, [isAuthenticated]);
-
-  // ── Text-to-Speech ────────────────────────────────────────────────────────
-  const speakText = useCallback(
-    (text, onDone) => {
-      if (!SPEECH_SYNTHESIS_SUPPORTED || !autoSpeak || !text) {
-        onDone?.();
-        return;
-      }
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        onDone?.();
-      };
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        onDone?.();
-      };
-      window.speechSynthesis.speak(utterance);
-    },
-    [autoSpeak]
+function Avatar({ name, size = 42 }) {
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center flex-shrink-0 text-white fw-semibold"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        backgroundColor: avatarColorFor(name),
+        fontSize: size * 0.36,
+      }}
+    >
+      {initialsFor(name)}
+    </div>
   );
+}
 
-  const stopSpeaking = () => {
-    if (SPEECH_SYNTHESIS_SUPPORTED) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+export default function MessagesPage() {
+  const { isAuthenticated, token } = useContext(AuthContext);
+  const { user } = useContext(UserContext);
+
+  const [conversations, setConversations] = useState([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [conversationsError, setConversationsError] = useState('');
+
+  const [selectedUser, setSelectedUser] = useState(null); // { id, full_name, role }
+  const [initialMessages, setInitialMessages] = useState([]);
+  const [loadingThread, setLoadingThread] = useState(false);
+
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const searchDebounceRef = useRef(null);
+
+  const loadConversations = useCallback(async () => {
+    setLoadingConversations(true);
+    setConversationsError('');
+    try {
+      const data = await chatService.getConversations();
+      setConversations(data);
+    } catch {
+      setConversationsError('Could not load your conversations.');
+    } finally {
+      setLoadingConversations(false);
     }
-  };
-
-  // Speak the newest AI message whenever it's appended (only while the
-  // widget is open, so background tabs don't start talking unexpectedly).
-  useEffect(() => {
-    if (!open || messages.length === 0) return;
-    const lastIdx = messages.length - 1;
-    const lastMsg = messages[lastIdx];
-    if (lastMsg.sender === 'ai' && lastIdx > lastSpokenIndexRef.current && !loading) {
-      lastSpokenIndexRef.current = lastIdx;
-      speakText(lastMsg.text, () => {
-        // The AI has finished talking — hand the turn back to the user.
-        // The recognizer never stopped, so this just resumes processing.
-        if (micOnRef.current) canProcessRef.current = true;
-      });
-    }
-  }, [messages, loading, open, speakText]);
-
-  // Stop speaking / listening when the panel is closed or unmounted.
-  useEffect(() => {
-    if (!open) {
-      stopSpeaking();
-      micOnRef.current = false;
-      canProcessRef.current = true;
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    return () => {
-      if (SPEECH_SYNTHESIS_SUPPORTED) window.speechSynthesis.cancel();
-      micOnRef.current = false;
-      recognitionRef.current?.stop();
-    };
   }, []);
 
-  const toggleAutoSpeak = () => {
-    setAutoSpeak((prev) => {
-      const next = !prev;
+  useEffect(() => {
+    if (isAuthenticated) loadConversations();
+  }, [isAuthenticated, loadConversations]);
+
+  // Debounced "new chat" user search -- fires 300ms after typing stops.
+  useEffect(() => {
+    if (!newChatOpen) return;
+    clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearching(true);
       try {
-        localStorage.setItem('aichat_auto_speak', String(next));
+        const results = await chatService.searchUsers(searchTerm.trim());
+        setSearchResults(results);
       } catch {
-        // ignore storage failures (e.g. private browsing)
-      }
-      if (!next) stopSpeaking();
-      return next;
-    });
-  };
-
-  // ── Sending a question (shared by typed submit and voice) ────────────────
-  const submitQuestion = useCallback(
-    async (userText) => {
-      if (!userText.trim() || loading) return;
-      setQuestion('');
-      committedTranscriptRef.current = '';
-      setError('');
-      stopSpeaking();
-
-      setMessages((prev) => [...prev, { sender: 'user', text: userText }]);
-      setLoading(true);
-
-      try {
-        const res = await chatbotService.askChatbot(userText);
-        setMessages((prev) => [...prev, { sender: 'ai', text: res.answer }]);
-      } catch (err) {
-        setError(extractErrorMessage(err, 'AI Assistant service is currently unreachable.'));
-        // No AI message will be appended, so the "speak finished" callback
-        // that normally reopens the mic will never fire — reopen it here.
-        if (micOnRef.current) canProcessRef.current = true;
+        setSearchResults([]);
       } finally {
-        setLoading(false);
+        setSearching(false);
       }
-    },
-    [loading]
-  );
+    }, 300);
+    return () => clearTimeout(searchDebounceRef.current);
+  }, [searchTerm, newChatOpen]);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    await submitQuestion(question.trim());
-  };
-
-  const handleClearHistory = async () => {
-    stopSpeaking();
-    if (!isAuthenticated) {
-      setMessages([GREETING]);
-      lastSpokenIndexRef.current = 0;
-      return;
-    }
+  const openThreadWith = async (otherUser) => {
+    setSelectedUser(otherUser);
+    setNewChatOpen(false);
+    setSearchTerm('');
+    setLoadingThread(true);
     try {
-      await chatbotService.clearChatHistory();
-      setMessages([{ sender: 'ai', text: 'Chat history cleared. How can I help you today?' }]);
-      lastSpokenIndexRef.current = 0;
-    } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to clear chat history.'));
+      const history = await chatService.getConversationHistory(otherUser.id);
+      setInitialMessages(history);
+    } catch {
+      setInitialMessages([]);
+    } finally {
+      setLoadingThread(false);
     }
+    // Refresh the inbox in the background so unread counts / ordering stay
+    // current once the user goes back to the list.
+    loadConversations();
   };
 
-  // ── Speech-to-Text ────────────────────────────────────────────────────────
-  const initRecognition = useCallback(() => {
-    if (!SPEECH_RECOGNITION_SUPPORTED) return null;
-    const recognition = new SpeechRecognitionAPI();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    // Continuous so the mic keeps listening across pauses instead of
-    // stopping after the first thing the user says.
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      // It's the AI's turn (thinking or speaking) — ignore anything the
-      // mic picks up right now (this also prevents the AI's own TTS audio
-      // from being transcribed back in as if the user said it).
-      if (!canProcessRef.current) return;
-
-      let interim = '';
-      let finalChunk = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalChunk += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-      if (finalChunk) {
-        committedTranscriptRef.current = `${committedTranscriptRef.current} ${finalChunk}`.trim();
-      }
-      setQuestion(`${committedTranscriptRef.current} ${interim}`.trim());
-
-      // The browser's own speech engine detected a pause (that's what
-      // `isFinal` means) — send right away instead of waiting for a click.
-      if (finalChunk && committedTranscriptRef.current) {
-        const toSend = committedTranscriptRef.current;
-        committedTranscriptRef.current = '';
-        canProcessRef.current = false; // hold the mic's attention until the AI responds
-        submitQuestion(toSend);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        micOnRef.current = false;
-        setIsListening(false);
-        setError('Microphone access was denied. Please allow microphone permissions to use voice input.');
-      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setError('Voice input error. Please try again or type your question.');
-      }
-      // 'no-speech'/'aborted' are transient — onend will decide whether to restart.
-    };
-
-    recognition.onend = () => {
-      // Some browsers stop recognition on their own after a period of
-      // silence even with continuous=true. If the user hasn't manually
-      // turned the mic off, restart it so listening effectively continues
-      // until they press the mic button again.
-      if (micOnRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          setIsListening(false);
-        }
-      } else {
-        setIsListening(false);
-      }
-    };
-
-    return recognition;
-  }, [submitQuestion]);
-
-  const handleMicClick = () => {
-    if (!SPEECH_RECOGNITION_SUPPORTED) {
-      setError('Voice input is not supported in this browser. Try Chrome or Edge.');
-      return;
-    }
-
-    if (isListening) {
-      // User is explicitly turning the mic off.
-      micOnRef.current = false;
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    stopSpeaking(); // don't listen while the AI is talking
-    setError('');
-    committedTranscriptRef.current = '';
-    micOnRef.current = true;
-    canProcessRef.current = true;
-    const recognition = initRecognition();
-    recognitionRef.current = recognition;
-    if (recognition) {
-      recognition.start();
-      setIsListening(true);
-    }
-  };
+  if (!isAuthenticated) return null;
 
   return (
-    <>
-      {/* Floating avatar toggle button, pinned to the right edge on every page */}
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-label={open ? 'Close AI chat assistant' : 'Open AI chat assistant'}
-        className="shadow-lg border-0 d-flex align-items-center justify-content-center"
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          width: '58px',
-          height: '58px',
-          borderRadius: '50%',
-          backgroundColor: 'var(--color-accent)',
-          color: '#fff',
-          zIndex: 1050,
-          fontSize: '1.5rem',
-          transition: 'transform 0.15s ease',
-        }}
-        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-      >
-        <i className={`bi ${open ? 'bi-x-lg' : 'bi-robot'}`}></i>
-      </button>
-
-      {/* Expandable chat panel */}
-      {open && (
-        <div
-          className="shadow-lg rounded-4 bg-white d-flex flex-column overflow-hidden"
-          style={{
-            position: 'fixed',
-            bottom: '92px',
-            right: '24px',
-            width: '360px',
-            maxWidth: 'calc(100vw - 32px)',
-            height: '520px',
-            maxHeight: 'calc(100vh - 140px)',
-            zIndex: 1049,
-            border: '1px solid rgba(0,0,0,0.08)',
-          }}
-        >
-          {/* Header */}
+    <div className="container-fluid py-4" style={{ maxWidth: '1100px' }}>
+      <div className="row g-3" style={{ minHeight: '75vh' }}>
+        {/* Conversation list / new chat search */}
+        <div className="col-12 col-md-4">
           <div
-            className="d-flex justify-content-between align-items-center px-3 py-3 text-white flex-shrink-0"
-            style={{ backgroundColor: 'var(--color-accent)' }}
+            className="bg-white h-100 d-flex flex-column"
+            style={{
+              borderRadius: '18px',
+              overflow: 'hidden',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+              border: '1px solid rgba(0,0,0,0.06)',
+            }}
           >
-            <div className="d-flex align-items-center gap-2">
-              <i className="bi bi-robot fs-5"></i>
-              <div>
-                <div className="fw-bold" style={{ fontSize: '0.95rem', lineHeight: 1.1 }}>
-                  AI Book Companion
-                </div>
-                <div style={{ fontSize: '0.7rem', opacity: 0.85 }}>Ask about books, orders & policies</div>
-              </div>
-            </div>
-            <div className="d-flex align-items-center gap-1">
-              {SPEECH_SYNTHESIS_SUPPORTED && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link text-white p-1"
-                  onClick={toggleAutoSpeak}
-                  title={autoSpeak ? 'Voice replies on — click to mute' : 'Voice replies off — click to unmute'}
-                >
-                  <i className={`bi ${autoSpeak ? 'bi-volume-up-fill' : 'bi-volume-mute-fill'}`}></i>
-                </button>
-              )}
+            <div className="d-flex justify-content-between align-items-center px-3 py-3 border-bottom flex-shrink-0">
+              <span className="fw-bold fs-6">Messages</span>
               <button
                 type="button"
-                className="btn btn-sm btn-link text-white p-1"
-                onClick={handleClearHistory}
-                title="Clear Chat History"
+                className="btn btn-sm rounded-pill text-white d-flex align-items-center gap-1 px-3"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+                onClick={() => setNewChatOpen((v) => !v)}
               >
-                <i className="bi bi-trash"></i>
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-link text-white p-1"
-                onClick={() => setOpen(false)}
-                title="Close"
-              >
-                <i className="bi bi-x-lg"></i>
+                <i className={`bi ${newChatOpen ? 'bi-x-lg' : 'bi-plus-lg'}`}></i>
+                {newChatOpen ? 'Cancel' : 'New chat'}
               </button>
             </div>
-          </div>
 
-          {/* Error Alert */}
-          {error && (
-            <div className="alert alert-danger m-2 py-2 px-3 mb-0 small" role="alert">
-              <i className="bi bi-exclamation-triangle-fill me-1"></i> {error}
-            </div>
-          )}
-
-          {/* Messages */}
-          <div className="flex-grow-1 overflow-auto p-3" style={{ backgroundColor: '#f8fafc' }}>
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`d-flex mb-3 ${msg.sender === 'user' ? 'justify-content-end' : 'justify-content-start'}`}
-              >
-                <div className="d-flex gap-2" style={{ maxWidth: '85%' }}>
-                  {msg.sender === 'ai' && (
-                    <div
-                      className="rounded-circle text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                      style={{ width: '28px', height: '28px', backgroundColor: '#4f46e5', fontSize: '0.8rem' }}
-                    >
-                      <i className="bi bi-robot"></i>
-                    </div>
-                  )}
-
-                  <div
-                    className={`p-2 px-3 rounded-4 shadow-sm ${
-                      msg.sender === 'user' ? 'text-white' : 'bg-white text-dark border'
-                    }`}
-                    style={msg.sender === 'user' ? { backgroundColor: 'var(--color-accent)' } : {}}
-                  >
-                    <p className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>
-                      {msg.text}
-                    </p>
-                    {msg.sender === 'ai' && idx === messages.length - 1 && isSpeaking && (
-                      <small className="text-muted d-flex align-items-center gap-1 mt-1">
-                        <i className="bi bi-soundwave"></i> Speaking…
-                      </small>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="d-flex justify-content-start mb-3">
-                <div className="d-flex align-items-center gap-2 bg-white p-2 px-3 rounded-4 border shadow-sm text-muted">
-                  <div className="spinner-grow spinner-grow-sm text-primary" role="status"></div>
-                  <small>Thinking…</small>
-                </div>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input Footer */}
-          <div className="p-2 border-top bg-white flex-shrink-0">
-            {isListening && (
-              <small className="text-danger d-flex align-items-center gap-1 mb-1 px-1">
-                <i className="bi bi-record-circle"></i>
-                {loading || isSpeaking
-                  ? ' Mic on, waiting for the AI to finish…'
-                  : ' Listening — sends automatically when you pause'}
-              </small>
-            )}
-            <form onSubmit={handleSendMessage} className="d-flex gap-2">
-              {SPEECH_RECOGNITION_SUPPORTED && (
-                <button
-                  type="button"
-                  className={`btn btn-sm rounded-circle flex-shrink-0 d-flex align-items-center justify-content-center ${
-                    isListening ? 'btn-danger text-white' : 'btn-outline-secondary'
-                  }`}
-                  style={{ width: '34px', height: '34px' }}
-                  onClick={handleMicClick}
-                  disabled={loading}
-                  title={isListening ? 'Stop listening' : 'Ask by voice'}
-                >
+            {newChatOpen ? (
+              <div className="p-3 flex-grow-1 overflow-auto">
+                <div className="position-relative mb-2">
                   <i
-                    className={`bi ${isListening ? 'bi-mic-fill' : 'bi-mic'}`}
-                    style={{ fontSize: '0.8rem' }}
+                    className="bi bi-search position-absolute text-muted"
+                    style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem' }}
                   ></i>
-                </button>
-              )}
-              <input
-                type="text"
-                className="form-control form-control-sm rounded-pill px-3"
-                placeholder={isListening ? 'Listening…' : 'Type a message…'}
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                disabled={loading}
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="btn btn-sm rounded-circle flex-shrink-0 d-flex align-items-center justify-content-center text-white"
-                style={{ width: '34px', height: '34px', backgroundColor: 'var(--color-accent)' }}
-                disabled={loading || !question.trim()}
-              >
-                {loading ? (
-                  <span className="spinner-border spinner-border-sm" role="status"></span>
-                ) : (
-                  <i className="bi bi-send-fill" style={{ fontSize: '0.8rem' }}></i>
+                  <input
+                    type="text"
+                    autoFocus
+                    className="form-control form-control-sm rounded-pill ps-4 pe-3"
+                    placeholder="Search by name or email…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ paddingLeft: '30px' }}
+                  />
+                </div>
+                {searching && <div className="text-muted small px-2 py-2">Searching…</div>}
+                {!searching && searchTerm.trim() && searchResults.length === 0 && (
+                  <div className="text-muted small px-2 py-2">No users found.</div>
                 )}
-              </button>
-            </form>
+                {!searching &&
+                  searchResults
+                    .filter((u) => u.id !== user?.id)
+                    .map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className="btn w-100 text-start d-flex align-items-center gap-2 mb-1 px-2 py-2 border-0 rounded-3"
+                        onClick={() => openThreadWith(u)}
+                        style={{ transition: 'background-color 0.12s ease' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f4f6f9')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <Avatar name={u.full_name} size={38} />
+                        <span className="flex-grow-1 overflow-hidden">
+                          <div className="small fw-semibold text-truncate">{u.full_name}</div>
+                          <div className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                            {u.role}
+                          </div>
+                        </span>
+                      </button>
+                    ))}
+              </div>
+            ) : (
+              <div className="flex-grow-1 overflow-auto">
+                {loadingConversations && (
+                  <div className="text-muted small p-3 text-center">Loading…</div>
+                )}
+                {!loadingConversations && conversationsError && (
+                  <div className="text-danger small p-3 text-center">{conversationsError}</div>
+                )}
+                {!loadingConversations && !conversationsError && conversations.length === 0 && (
+                  <div className="text-muted small p-4 text-center">
+                    <i className="bi bi-chat-square-text fs-2 d-block mb-2 opacity-50"></i>
+                    No conversations yet — start a new chat.
+                  </div>
+                )}
+                {!loadingConversations &&
+                  conversations.map((c) => {
+                    const active = selectedUser && selectedUser.id === c.other_user.id;
+                    return (
+                      <button
+                        key={c.other_user.id}
+                        type="button"
+                        className="btn w-100 text-start d-flex align-items-center gap-2 px-3 py-2 border-0 border-bottom rounded-0"
+                        onClick={() => openThreadWith(c.other_user)}
+                        style={{
+                          backgroundColor: active ? '#eef2ff' : 'transparent',
+                          borderLeft: active ? '3px solid var(--color-accent)' : '3px solid transparent',
+                        }}
+                      >
+                        <Avatar name={c.other_user.full_name} />
+                        <span className="flex-grow-1 overflow-hidden">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span className="small fw-semibold text-truncate">
+                              {c.other_user.full_name}
+                            </span>
+                            {c.unread_count > 0 && (
+                              <span
+                                className="badge rounded-pill text-white flex-shrink-0 ms-2"
+                                style={{ backgroundColor: 'var(--color-accent)', fontSize: '0.68rem' }}
+                              >
+                                {c.unread_count}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-muted text-truncate" style={{ fontSize: '0.76rem', maxWidth: '220px' }}>
+                            {c.last_message?.content || 'No messages yet'}
+                          </div>
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         </div>
-      )}
-    </>
-  );
-};
 
-export default ChatWidget;
+        {/* Active thread */}
+        <div className="col-12 col-md-8">
+          {!selectedUser && (
+            <div
+              className="bg-white h-100 d-flex flex-column align-items-center justify-content-center text-muted"
+              style={{
+                borderRadius: '18px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              <i className="bi bi-chat-dots fs-1 mb-2 opacity-50"></i>
+              <span className="small">Select a conversation or start a new one.</span>
+            </div>
+          )}
+          {selectedUser && loadingThread && (
+            <div
+              className="bg-white h-100 d-flex align-items-center justify-content-center text-muted"
+              style={{
+                borderRadius: '18px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              Loading conversation…
+            </div>
+          )}
+          {selectedUser && !loadingThread && (
+            <ChatWindow
+              token={token}
+              currentUserId={user.id}
+              otherUserId={selectedUser.id}
+              otherUserName={selectedUser.full_name}
+              initialMessages={initialMessages}
+              maxWidth="100%"
+              height="75vh"
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

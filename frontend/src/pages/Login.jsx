@@ -123,6 +123,13 @@ const Login = () => {
                     <label htmlFor="login-password" className="form-label fw-semibold mb-0">
                       Password
                     </label>
+                    <Link
+                      to="/forgot-password"
+                      className="small fw-semibold text-decoration-none"
+                      style={{ color: 'var(--color-accent)' }}
+                    >
+                      Forgot password?
+                    </Link>
                   </div>
                   <div className="input-group mt-1">
                     <span className="input-group-text bg-light border-end-0">
