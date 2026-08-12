@@ -11,6 +11,8 @@ import Deals from '../pages/Deals';
 import Stationery from '../pages/Stationery';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
+import ForgotPassword from '../pages/ForgotPassword';
+import ResetPassword from '../pages/ResetPassword';
 
 // Protected Pages
 import Profile from '../pages/Profile';
@@ -36,6 +38,8 @@ const AppRoutes = () => {
       <Route path="/" element={<Layout><Home /></Layout>} />
       <Route path="/login" element={<Layout><Login /></Layout>} />
       <Route path="/register" element={<Layout><Register /></Layout>} />
+      <Route path="/forgot-password" element={<Layout><ForgotPassword /></Layout>} />
+      <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
 
       {/* Now gated: browsing the catalog requires an account */}
       <Route path="/books" element={
