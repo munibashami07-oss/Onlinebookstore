@@ -1,3 +1,4 @@
+# force-rebuild-marker
 """Authentication API router endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
