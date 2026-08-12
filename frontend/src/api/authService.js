@@ -78,6 +78,31 @@ const authService = {
     const response = await apiClient.get('/auth/me');
     return response.data;
   },
+
+  /**
+   * Request a password reset email. Always resolves (backend returns a
+   * generic success message regardless of whether the email exists).
+   * @param {string} email
+   * @returns {Promise<{ status: string, message: string }>}
+   */
+  forgotPassword: async (email) => {
+    const response = await apiClient.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  /**
+   * Redeem a password reset token (from the emailed link) and set a new password.
+   * @param {string} token
+   * @param {string} newPassword
+   * @returns {Promise<{ status: string, message: string }>}
+   */
+  resetPassword: async (token, newPassword) => {
+    const response = await apiClient.post('/auth/reset-password', {
+      token,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
 };
 
 export default authService;
