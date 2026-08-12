@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_active_user, get_db
 from app.models.user import User
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     LoginRequest,
     RefreshTokenRequest,
     RefreshTokenResponse,
     RegisterRequest,
+    ResetPasswordRequest,
     TokenResponse,
 )
 from app.schemas.user import UserResponse
@@ -122,6 +124,47 @@ async def logout(
         "status": "success",
         "message": f"Successfully logged out user '{current_user.email}'. Client should discard stored tokens.",
     }
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    summary="Request a password reset email",
+)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Send a password reset link to the given email, if an account exists.
+
+    Always returns the same generic success message regardless of whether
+    the email is registered, so this endpoint can't be used to enumerate
+    accounts.
+    """
+    auth_service = AuthService(db)
+    await auth_service.forgot_password(payload.email)
+    return {
+        "status": "success",
+        "message": "If an account exists for that email, a reset link is on its way.",
+    }
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    summary="Reset a password using a token from the reset email",
+)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Redeem a reset token and set a new password."""
+    auth_service = AuthService(db)
+    try:
+        await auth_service.reset_password(payload.token, payload.new_password)
+        return {"status": "success", "message": "Password has been reset. You can now sign in."}
+    except AuthServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
 
 
 @router.get(
