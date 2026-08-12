@@ -17,6 +17,7 @@ from app.models.review import Review
 from app.models.chatbot import ChatbotLog
 from app.models.chat_message import ChatMessage
 from app.models.notification import Notification, NotificationType
+from app.models.password_reset_token import PasswordResetToken
 
 __all__ = [
     "Base",
@@ -43,4 +44,5 @@ __all__ = [
     "ChatMessage",
     "Notification",
     "NotificationType",
+    "PasswordResetToken",
 ]
