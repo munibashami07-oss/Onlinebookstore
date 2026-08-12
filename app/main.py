@@ -90,7 +90,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/health", tags=["Health Check"])
 async def health_check():
     """Health check endpoint to verify API operation."""
-    return {"status": "healthy", "project": settings.PROJECT_NAME}
+    return {"status": "healthy-v2-test", "project": settings.PROJECT_NAME}
 
 
 # ── Exception Handlers ────────────────────────────────────────────────────────
