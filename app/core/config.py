@@ -35,16 +35,18 @@ class Settings(BaseSettings):
     # AI Integration Settings (Prepared for Phase 13)
     OPENAI_API_KEY: str = ""
 
-    # Email / Gmail SMTP Settings (Account confirmation emails)
-    GMAIL_ADDRESS: str = ""
-    GMAIL_APP_PASSWORD: str = ""
+    # Password Reset Email (Gmail SMTP)
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    MAIL_FROM_EMAIL: str = ""
+    MAIL_FROM_NAME: str = "BookHaven"
+    RESET_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # Base URL this backend is served from, used to build the verification
-    # link embedded in the confirmation email (e.g. https://api.yourdomain.com)
-    BACKEND_BASE_URL: str = "http://localhost:8000"
+    # Public URL of the deployed frontend (Netlify), used to build the
+    # password-reset link embedded in the email. No trailing slash.
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # CORS Configuration
     BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = [
