@@ -102,8 +102,26 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
   }, []);
 
+  /**
+   * Request a password reset email for the given address.
+   * Does not touch auth state -- the user isn't logged in by this.
+   */
+  const forgotPassword = useCallback(async (email) => {
+    return authService.forgotPassword(email);
+  }, []);
+
+  /**
+   * Redeem a reset token (from the emailed link) and set a new password.
+   * Does not auto-login. Caller should redirect to /login on success.
+   */
+  const resetPassword = useCallback(async (token, newPassword) => {
+    return authService.resetPassword(token, newPassword);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, token, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, token, loading, login, register, logout, forgotPassword, resetPassword }}
+    >
       {children}
     </AuthContext.Provider>
   );
