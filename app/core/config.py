@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     MAIL_FROM_EMAIL: str = ""
     MAIL_FROM_NAME: str = "BookHaven"
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
-
+    RESEND_API_KEY: str = ""
     # Public URL of the deployed frontend (Netlify), used to build the
     # password-reset link embedded in the email. No trailing slash.
     FRONTEND_URL: str = "http://localhost:5173"
