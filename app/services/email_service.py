@@ -79,3 +79,46 @@ async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     except Exception:
         logger.exception("Failed to send password reset email to %s", to_email)
         raise
+
+
+async def send_verification_email(to_email: str, full_name: str, verify_url: str) -> None:
+    """Send the account confirmation email with the given verification link.
+
+    Best-effort: raises on failure so the caller (AuthService.register) can
+    decide how to react -- registration itself should still succeed even if
+    this fails, so the caller catches and logs rather than propagating.
+    """
+    subject = "Confirm your BookHaven account"
+    text_body = (
+        f"Hi {full_name},\n\n"
+        "Thanks for creating a BookHaven account. Please confirm your email "
+        "address by opening the link below:\n\n"
+        f"{verify_url}\n\n"
+        f"This link expires in {settings.EMAIL_VERIFICATION_EXPIRE_HOURS} hours. "
+        "You can still log in and use your account before confirming.\n\n"
+        "If you did not create this account, you can ignore this email."
+    )
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+      <h2 style="color: #0f172a;">Confirm your email</h2>
+      <p>Hi {full_name}, thanks for creating a BookHaven account.</p>
+      <p>
+        <a href="{verify_url}"
+           style="display: inline-block; padding: 12px 24px; background: #d97706;
+                  color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Confirm Email
+        </a>
+      </p>
+      <p style="color: #64748b; font-size: 0.9em;">
+        This link expires in {settings.EMAIL_VERIFICATION_EXPIRE_HOURS} hours.
+        You can still log in and use your account before confirming.
+        If you didn't create this account, you can safely ignore this email.
+      </p>
+    </div>
+    """
+
+    try:
+        await run_in_threadpool(_send_sync, to_email, subject, html_body, text_body)
+    except Exception:
+        logger.exception("Failed to send verification email to %s", to_email)
+        raise

@@ -1,12 +1,14 @@
 """Service layer for authentication workflows."""
 
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.email_verification import create_email_verification_token
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -23,7 +25,9 @@ from app.schemas.auth import (
     RegisterRequest,
     TokenResponse,
 )
-from app.services.email_service import send_password_reset_email
+from app.services.email_service import send_password_reset_email, send_verification_email
+
+logger = logging.getLogger(__name__)
 
 
 class AuthServiceError(Exception):
@@ -68,7 +72,24 @@ class AuthService:
             is_active=True,
             is_superuser=False,
         )
-        return await self.user_repo.create_user(user)
+        user = await self.user_repo.create_user(user)
+
+        # Send the confirmation email, but never let a mail failure block
+        # registration -- the account is already created at this point.
+        try:
+            token = create_email_verification_token(user.email)
+            verify_url = (
+                f"{settings.BACKEND_BASE_URL}{settings.API_V1_STR}"
+                f"/verify-email?token={token}"
+            )
+            await send_verification_email(user.email, user.full_name, verify_url)
+        except Exception:
+            logger.exception(
+                "Failed to send verification email during registration for %s",
+                user.email,
+            )
+
+        return user
 
     async def login(self, payload: LoginRequest) -> TokenResponse:
         """Authenticate user credentials and issue token pair.
