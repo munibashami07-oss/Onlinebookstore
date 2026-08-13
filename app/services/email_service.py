@@ -1,45 +1,50 @@
-"""Email sending via Gmail SMTP.
+"""Email sending via the Resend HTTP API.
 
-Uses the standard library `smtplib` over STARTTLS on port 587, which is
-what a Gmail "app password" (Google Account -> Security -> 2-Step
-Verification -> App passwords) is for -- your normal Gmail password won't
-work here, Google blocks plain SMTP auth with it.
+Switched from Gmail SMTP because Railway blocks outbound SMTP ports
+(25/465/587) on Free/Trial/Hobby plans -- connections just hang until
+they time out. Resend sends over plain HTTPS, so this works on any
+Railway plan with no networking changes needed.
 
-Required environment variables (set these in Railway's dashboard for the
-backend service, not committed to source):
-    SMTP_USERNAME     - the full Gmail address sending the email
-    SMTP_PASSWORD     - the 16-character Gmail app password (not your login password)
-    MAIL_FROM_EMAIL   - usually the same as SMTP_USERNAME
-    MAIL_FROM_NAME    - display name, e.g. "BookHaven"
+Required environment variables:
+    RESEND_API_KEY    - from https://resend.com/api-keys
+    MAIL_FROM_EMAIL    - must be on a domain you've verified with Resend
+                          (Resend's onboarding@resend.dev works for testing
+                          without a verified domain, but only delivers to
+                          your own Resend account email until you verify one)
+    MAIL_FROM_NAME     - display name, e.g. "BookHaven"
 
-`smtplib` is synchronous/blocking, so sends are run in FastAPI's
-threadpool via `run_in_threadpool` rather than blocking the event loop.
+Since this is a plain HTTPS call, it runs natively as an async request --
+no threadpool needed (unlike the old smtplib-based version).
 """
 
 import logging
-import smtplib
-from email.message import EmailMessage
 
-from starlette.concurrency import run_in_threadpool
+import httpx
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+RESEND_API_URL = "https://api.resend.com/emails"
 
-def _send_sync(to_email: str, subject: str, html_body: str, text_body: str) -> None:
-    """Blocking SMTP send -- always call via run_in_threadpool from async code."""
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM_EMAIL}>"
-    message["To"] = to_email
-    message.set_content(text_body)
-    message.add_alternative(html_body, subtype="html")
 
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as smtp:
-        smtp.starttls()
-        smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-        smtp.send_message(message)
+async def _send_via_resend(to_email: str, subject: str, html_body: str, text_body: str) -> None:
+    """POST a single email to the Resend API. Raises on non-2xx responses."""
+    payload = {
+        "from": f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM_EMAIL}>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+        "text": text_body,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(RESEND_API_URL, json=payload, headers=headers)
+        response.raise_for_status()
 
 
 async def send_password_reset_email(to_email: str, reset_url: str) -> None:
@@ -75,7 +80,7 @@ async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     """
 
     try:
-        await run_in_threadpool(_send_sync, to_email, subject, html_body, text_body)
+        await _send_via_resend(to_email, subject, html_body, text_body)
     except Exception:
         logger.exception("Failed to send password reset email to %s", to_email)
         raise
@@ -118,7 +123,7 @@ async def send_verification_email(to_email: str, full_name: str, verify_url: str
     """
 
     try:
-        await run_in_threadpool(_send_sync, to_email, subject, html_body, text_body)
+        await _send_via_resend(to_email, subject, html_body, text_body)
     except Exception:
         logger.exception("Failed to send verification email to %s", to_email)
         raise
