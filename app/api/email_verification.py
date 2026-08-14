@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db
+from app.dependencies import get_db
 from app.core.email_verification import decode_email_verification_token
-from app.repositories.user import UserRepository
+from app.repositories.user_repository import UserRepository
 
 router = APIRouter()
 
@@ -31,6 +31,6 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 
     if not user.is_verified:
         user.is_verified = True
-        await db.commit()
+        await user_repo.update_user(user)
 
     return "Your email has been confirmed. You can close this tab."
